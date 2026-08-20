@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RepGate — 運動しないと解除できないゲート</title>
+<meta name="description" content="設定した時刻になるとゲートが閉じ、腹筋・腕立て・スクワットをカメラの前でやると解除される。判定は端末内で完結し、映像はどこにも送られない。">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-view="home">
+
+<!-- ============ ホーム ============ -->
+<section class="view" data-name="home">
+  <header class="head">
+    <h1 class="brand">RepGate</h1>
+    <button class="icon-btn" id="toSettings" aria-label="設定">設定</button>
+  </header>
+
+  <div class="stack">
+    <div class="hero">
+      <p class="hero__label">今日の合計</p>
+      <p class="hero__num"><span id="todayReps">0</span><span class="hero__unit">回</span></p>
+      <p class="hero__sub"><span id="streak">0</span>日連続 ／ 通算 <span id="totalReps">0</span>回</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <span class="row__k">次のゲート</span>
+        <strong class="row__v" id="nextGate">—</strong>
+      </div>
+      <div class="row">
+        <span class="row__k">解除に必要な運動</span>
+        <strong class="row__v" id="requirement">—</strong>
+      </div>
+    </div>
+
+    <button class="btn btn--primary" id="startNow">今すぐやる</button>
+
+    <div class="card card--note">
+      <p class="note__title">これはブラウザ内だけの擬似ゲートです</p>
+      <p>Webページには他のアプリを止める権限がないため、<b>本物のスマホロックはできません</b>。ここで閉じるのはこの画面だけです。実ロックはiOSネイティブ版で作ります。</p>
+      <details>
+        <summary>それでも「開いたら邪魔される」状態を作る方法（iPhone）</summary>
+        <ol>
+          <li>ショートカットアプリ →「オートメーション」→「＋」</li>
+          <li>「App」を選び、対象アプリ（Instagram など）の<b>「開いている」</b>にチェック</li>
+          <li>「すぐに実行」を選ぶ</li>
+          <li>アクションに「URLを開く」を追加し、このページのURLを入れる</li>
+        </ol>
+        <p class="muted">対象アプリを開くたびにこのページが割り込みます。ブロックではなく割り込みなので、戻ろうと思えば戻れます。</p>
+      </details>
+    </div>
+
+    <div class="card card--note">
+      <p class="note__title">映像は端末から出ません</p>
+      <p>姿勢の判定はブラウザの中だけで動きます。録画も保存も送信もしません。</p>
+    </div>
+
+    <button class="btn btn--ghost" id="toHistory">記録を見る</button>
+  </div>
+</section>
+
+<!-- ============ 設定 ============ -->
+<section class="view" data-name="settings">
+  <header class="head">
+    <button class="icon-btn" data-back aria-label="戻る">戻る</button>
+    <h1 class="head__title">設定</h1>
+    <span class="icon-btn icon-btn--placeholder" aria-hidden="true"></span>
+  </header>
+
+  <div class="stack">
+    <div class="field">
+      <label class="field__label">種目</label>
+      <div class="seg" id="exerciseSeg" role="radiogroup" aria-label="種目"></div>
+      <p class="field__hint" id="exerciseHint"></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="targetReps">解除に必要な回数</label>
+      <div class="stepper">
+        <button type="button" class="stepper__btn" data-step="-1" aria-label="減らす">−</button>
+        <input id="targetReps" type="number" min="1" max="100" inputmode="numeric">
+        <button type="button" class="stepper__btn" data-step="1" aria-label="増やす">＋</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="lockStart">ゲートが始まる時刻</label>
+      <input id="lockStart" type="time">
+      <p class="field__hint">この時刻を過ぎるとゲートが有効になります。</p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="lockEnd">ゲートが終わる時刻</label>
+      <input id="lockEnd" type="time">
+      <p class="field__hint">この時刻を過ぎるとゲートは出ません。開始と同じ時刻にすると24時間有効になります。</p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="intervalMin">解除してから次のゲートまで</label>
+      <div class="stepper">
+        <button type="button" class="stepper__btn" data-step-min="-15" aria-label="減らす">−</button>
+        <input id="intervalMin" type="number" min="1" max="720" inputmode="numeric">
+        <button type="button" class="stepper__btn" data-step-min="15" aria-label="増やす">＋</button>
+      </div>
+      <p class="field__hint">単位は分。解除するたびに、この時間だけ猶予ができます。</p>
+    </div>
+
+    <div class="field">
+      <label class="field__label">通知</label>
+      <button class="btn btn--ghost" id="askNotify">ゲートの通知を許可する</button>
+      <p class="field__hint" id="notifyState"></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label">カメラ</label>
+      <div class="seg" id="cameraSeg" role="radiogroup" aria-label="カメラ">
+        <button type="button" data-facing="user" role="radio">内カメラ</button>
+        <button type="button" data-facing="environment" role="radio">外カメラ</button>
+      </div>
+    </div>
+
+    <button class="btn btn--ghost btn--danger" id="resetAll">記録と設定をすべて消す</button>
+  </div>
+</section>
+
+<!-- ============ セットアップ（開始前チェック） ============ -->
+<section class="view view--camera" data-name="setup">
+  <div class="camwrap">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div class="camwrap__guide" id="setupGuide">
+      <p class="guide__title" id="guideTitle">カメラを準備しています…</p>
+      <p class="guide__body" id="guideBody"></p>
+    </div>
+  </div>
+
+  <div class="cam-panel">
+    <p class="cam-panel__lead" id="setupLead">全身が入るように置いてください</p>
+    <div class="checklist" id="checklist"></div>
+    <div class="cam-actions">
+      <button class="btn btn--ghost" data-back>やめる</button>
+      <button class="btn btn--primary" id="beginWorkout" disabled>はじめる</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 計測 ============ -->
+<section class="view view--camera" data-name="workout">
+  <div class="camwrap">
+    <video id="video2" playsinline muted autoplay></video>
+    <canvas id="overlay2"></canvas>
+
+    <div class="hud">
+      <div class="hud__count">
+        <span id="repCount">0</span><span class="hud__slash">/</span><span id="repTarget">0</span>
+      </div>
+      <p class="hud__msg" id="hudMsg"></p>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="meter" aria-hidden="true">
+        <div class="meter__fill" id="meterFill"></div>
+      </div>
+      <p class="hud-bottom__debug" id="debugLine"></p>
+    </div>
+  </div>
+
+  <div class="cam-actions cam-actions--floating">
+    <button class="btn btn--ghost" id="abortWorkout">中断</button>
+  </div>
+</section>
+
+<!-- ============ リザルト ============ -->
+<section class="view" data-name="result">
+  <header class="head">
+    <button class="icon-btn" data-back aria-label="戻る">閉じる</button>
+    <h1 class="head__title">完了</h1>
+    <span class="icon-btn icon-btn--placeholder" aria-hidden="true"></span>
+  </header>
+
+  <div class="stack">
+    <canvas id="resultCanvas" class="result-canvas" width="1080" height="1350"></canvas>
+
+    <div class="seg seg--full" id="ratioSeg" role="radiogroup" aria-label="画像の比率">
+      <button type="button" data-ratio="4:5" role="radio" aria-checked="true">縦長 4:5</button>
+      <button type="button" data-ratio="1:1" role="radio" aria-checked="false">正方形 1:1</button>
+    </div>
+
+    <button class="btn btn--primary" id="shareBtn">画像を共有する</button>
+    <button class="btn btn--ghost" id="downloadBtn">画像を保存する</button>
+
+    <div class="card" id="sessionStats"></div>
+  </div>
+</section>
+
+<!-- ============ 記録 ============ -->
+<section class="view" data-name="history">
+  <header class="head">
+    <button class="icon-btn" data-back aria-label="戻る">戻る</button>
+    <h1 class="head__title">記録</h1>
+    <span class="icon-btn icon-btn--placeholder" aria-hidden="true"></span>
+  </header>
+  <div class="stack">
+    <div class="card" id="historyList"></div>
+    <div class="card card--note">
+      <p class="note__title">検証用のログ</p>
+      <p>1レップごとの所要時間と角度の振れ幅を残しています。カメラの置き方を変えて比べるときに使ってください。</p>
+      <button class="btn btn--ghost" id="exportLog">計測ログを書き出す</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ゲート（全画面オーバーレイ） ============ -->
+<div class="gate" id="gate" hidden>
+  <div class="gate__inner">
+    <p class="gate__eyebrow">GATE CLOSED</p>
+    <h2 class="gate__title">時間になりました</h2>
+    <p class="gate__req"><span id="gateReq">—</span>で解除できます</p>
+    <button class="btn btn--primary btn--lg" id="gateStart">カメラを開く</button>
+    <button class="btn btn--ghost btn--sm" id="gateSnooze">あとで（5分）</button>
+    <p class="gate__note">閉じているのはこの画面だけです。ほかのアプリは止まりません。</p>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
