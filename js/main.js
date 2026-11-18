@@ -38,6 +38,7 @@ let sessionStartedAt = 0;
 let lastSession = null;
 let ratio = '4:5';
 let messageTimer = 0;
+let gateTimer = 0;
 
 /* ============================ 画面遷移 ============================ */
 
@@ -208,10 +209,6 @@ function wouldGateClose(epochMs, state) {
   return inLockWindow(new Date(epochMs));
 }
 
-function gateShouldBeClosed(now = Date.now()) {
-  return wouldGateClose(now, store.loadState());
-}
-
 /** 解除・猶予の満了時刻と、それ以降の分の境界を48時間先まで調べる。 */
 function describeNextGate() {
   const state = store.loadState();
@@ -258,12 +255,19 @@ function closeGate() {
 }
 
 function checkGate() {
+  clearTimeout(gateTimer);
   if (els.body.dataset.view === 'workout' || els.body.dataset.view === 'setup') return;
-  if (gateShouldBeClosed()) openGate();
+  const now = Date.now();
+  const state = store.loadState();
+  if (wouldGateClose(now, state)) openGate();
   else closeGate();
   if (els.body.dataset.view === 'home') {
     els.nextGate.textContent = describeNextGate();
   }
+  const nextMinute = (Math.floor(now / 60000) + 1) * 60000;
+  const releasedUntil = Math.max(state.unlockedUntil, state.snoozeUntil);
+  const nextCheck = releasedUntil > now ? Math.min(releasedUntil, nextMinute) : nextMinute;
+  gateTimer = setTimeout(checkGate, Math.max(0, nextCheck - Date.now()));
 }
 
 els.gate.addEventListener('cancel', (event) => event.preventDefault());
