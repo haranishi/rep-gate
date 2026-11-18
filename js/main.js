@@ -396,9 +396,10 @@ function tick() {
     try {
       lastResult = detect(video, performance.now());
     } catch (err) {
+      lastResult = null;
       console.warn('推論に失敗しました', err);
     }
-    if (lastResult) handleResult(lastResult);
+    handleResult(lastResult);
   }
 
   const ctx = canvas.getContext('2d');
@@ -411,8 +412,8 @@ function tick() {
 }
 
 function handleResult(result) {
-  const landmarks = result.landmarks?.[0];
-  const world = result.worldLandmarks?.[0];
+  const landmarks = result?.landmarks?.[0];
+  const world = result?.worldLandmarks?.[0];
   const def = EXERCISES[settings.exercise] ?? EXERCISES.situp;
 
   if (mode === 'setup') {
