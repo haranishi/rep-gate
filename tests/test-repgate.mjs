@@ -76,6 +76,12 @@ const logic = await page.evaluate(async () => {
     { lm: situp(160), t: 1100 },
   ]);
 
+  out.startsContracted = run('situp', [
+    { lm: situp(80), t: 0 },
+    { lm: situp(120), t: 500 },
+    { lm: situp(160), t: 1000 },
+  ]);
+
   // 2) 速すぎる: 同じ動きを300msで
   out.tooFast = run('situp', [
     { lm: situp(160), t: 0 },
@@ -140,6 +146,7 @@ const logic = await page.evaluate(async () => {
 });
 
 ok('正常な1レップを数える', logic.normal.count === 1, `count=${logic.normal.count}`);
+ok('縮んだ姿勢から伸びるだけでは数えない', logic.startsContracted.count === 0, `count=${logic.startsContracted.count}`);
 ok('1レップのログに所要時間が残る', logic.normal.log[0]?.ms >= 800, JSON.stringify(logic.normal.log[0] ?? {}));
 ok('速すぎるレップは数えない', logic.tooFast.count === 0 && logic.tooFast.events.includes('too_fast'), `count=${logic.tooFast.count} events=${logic.tooFast.events}`);
 ok('可動域が足りないレップは数えない', logic.partial.count === 0 && logic.partial.events.includes('form'), `count=${logic.partial.count} events=${logic.partial.events}`);

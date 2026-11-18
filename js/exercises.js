@@ -166,8 +166,8 @@ export class RepCounter {
       this.formBroken = false;
       this.minAngleInRep = Infinity;
       this.maxAngleInRep = -Infinity;
-    } else {
-      if (this.phase === 'extended' || this.phase === 'init') {
+    } else if (this.phase !== 'init') {
+      if (this.phase === 'extended') {
         // 伸びきりから動き出した＝1レップの開始
         this.repStartedAt = now;
         this.reachedContracted = false;
