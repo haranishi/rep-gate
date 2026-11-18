@@ -50,6 +50,7 @@ function setView(name) {
   if (name === 'home') renderHome();
   if (name === 'history') renderHistory();
   window.scrollTo(0, 0);
+  if (name === 'home') checkGate();
 }
 
 document.querySelectorAll('[data-back]').forEach((btn) => {
