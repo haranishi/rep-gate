@@ -108,7 +108,7 @@ export function drawSkeleton(ctx, landmarks, w, h, color) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
 
-  for (const [a, b] of PoseLandmarker.POSE_CONNECTIONS) {
+  for (const { start: a, end: b } of PoseLandmarker.POSE_CONNECTIONS) {
     const p = landmarks[a];
     const q = landmarks[b];
     if (!p || !q) continue;

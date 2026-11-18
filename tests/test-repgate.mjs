@@ -266,6 +266,16 @@ const looping = await page.evaluate(() => {
 });
 ok('オーバーレイが映像サイズに同期する', looping);
 
+const skeletonDrawn = await page.evaluate(async () => {
+  const { drawSkeleton } = await import('/js/pose.js');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const points = Array.from({ length: 33 }, (_, i) => ({ x: i % 2 ? 0.25 : 0.75, y: 0.5, visibility: 1 }));
+  drawSkeleton(ctx, points, canvas.width, canvas.height, '#3ddc97');
+  return ctx.getImageData(150, 75, 1, 1).data[3] > 0;
+});
+ok('関節が検出されたら線で結ぶ', skeletonDrawn);
+
 /* ---------------- スクリーンショット ---------------- */
 
 const shotDir = new URL('./output', import.meta.url).pathname;
