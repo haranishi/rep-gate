@@ -94,11 +94,15 @@ export function visibilityOf(landmarks, index) {
  * 左右のうち、必要な関節がよく見えている側を選ぶ。
  * 横向きに寝る腹筋では片側しか映らないため、これが要る。
  */
-export function pickSide(landmarks, leftIdx, rightIdx) {
+export function pickSide(landmarks, leftIdx, rightIdx, minVisibility = 0) {
+  const meetsThreshold = (idx) => idx.every((i) => visibilityOf(landmarks, i) >= minVisibility);
+  const leftOk = meetsThreshold(leftIdx);
+  const rightOk = meetsThreshold(rightIdx);
   const score = (idx) => idx.reduce((s, i) => s + visibilityOf(landmarks, i), 0) / idx.length;
   const l = score(leftIdx);
   const r = score(rightIdx);
-  return r > l ? { side: 'right', indices: rightIdx, score: r } : { side: 'left', indices: leftIdx, score: l };
+  const useRight = leftOk === rightOk ? r > l : rightOk;
+  return useRight ? { side: 'right', indices: rightIdx, score: r } : { side: 'left', indices: leftIdx, score: l };
 }
 
 /** 骨格を canvas に描く。ライブラリの描画ユーティリティは使わず自前で引く。 */
