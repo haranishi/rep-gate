@@ -524,7 +524,7 @@ function finishWorkout() {
     seconds: Math.round(seconds),
     log: counter.log,
   };
-  store.addSession(lastSession);
+  $('recordWarning').hidden = store.addSession(lastSession);
 
   const state = store.loadState();
   state.unlockedUntil = Date.now() + settings.intervalMin * 60000;

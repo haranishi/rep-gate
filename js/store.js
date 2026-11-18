@@ -25,8 +25,10 @@ function read(key, fallback) {
 function write(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch (err) {
     console.warn('保存できませんでした', err);
+    return false;
   }
 }
 
@@ -51,8 +53,7 @@ export function loadHistory() {
 export function addSession(session) {
   const history = loadHistory();
   history.unshift(session);
-  write(KEY_HISTORY, history.slice(0, 500));
-  return history;
+  return write(KEY_HISTORY, history);
 }
 
 export function clearAll() {
