@@ -233,8 +233,9 @@ function describeNextGate() {
 
 function openGate() {
   if (!els.gate.hidden) return;
-  els.gate.hidden = false;
   els.gateReq.textContent = requirementText();
+  els.gate.hidden = false;
+  els.gate.showModal();
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       new Notification('RepGate', { body: `${requirementText()}で解除できます`, tag: 'repgate-gate' });
@@ -243,6 +244,7 @@ function openGate() {
 }
 
 function closeGate() {
+  els.gate.close();
   els.gate.hidden = true;
 }
 
@@ -255,6 +257,7 @@ function checkGate() {
   }
 }
 
+els.gate.addEventListener('cancel', (event) => event.preventDefault());
 $('gateStart').addEventListener('click', () => {
   closeGate();
   beginSetup();
