@@ -27,6 +27,7 @@ const els = {
 
 let settings = store.loadSettings();
 let stream = null;
+let cameraRequest = null;
 let rafId = null;
 let mode = null;             // 'setup' | 'workout'
 let counter = null;
@@ -37,15 +38,20 @@ let sessionStartedAt = 0;
 let lastSession = null;
 let ratio = '4:5';
 let messageTimer = 0;
+let gateTimer = 0;
 
 /* ============================ 画面遷移 ============================ */
 
 function setView(name) {
   els.body.dataset.view = name;
-  if (name !== 'setup' && name !== 'workout') stopLoop();
+  if (name !== 'setup' && name !== 'workout') {
+    stopLoop();
+    stopCamera();
+  }
   if (name === 'home') renderHome();
   if (name === 'history') renderHistory();
   window.scrollTo(0, 0);
+  if (name === 'home') checkGate();
 }
 
 document.querySelectorAll('[data-back]').forEach((btn) => {
@@ -203,34 +209,39 @@ function wouldGateClose(epochMs, state) {
   return inLockWindow(new Date(epochMs));
 }
 
-function gateShouldBeClosed(now = Date.now()) {
-  return wouldGateClose(now, store.loadState());
-}
-
-/** 次にゲートが閉じる時刻。1分刻みで48時間先まで探す。 */
+/** 解除・猶予の満了時刻と、それ以降の分の境界を48時間先まで調べる。 */
 function describeNextGate() {
   const state = store.loadState();
   const now = Date.now();
   if (wouldGateClose(now, state)) return 'いま（ゲート中）';
 
-  for (let i = 1; i <= 60 * 48; i += 1) {
-    const t = now + i * 60000;
-    if (wouldGateClose(t, state)) {
-      const d = new Date(t);
-      const p = (n) => String(n).padStart(2, '0');
-      const sameDay = d.toDateString() === new Date(now).toDateString();
-      const mins = Math.round((t - now) / 60000);
-      const when = `${sameDay ? '' : '明日 '}${p(d.getHours())}:${p(d.getMinutes())}`;
-      return mins < 60 ? `${when}（あと${mins}分）` : when;
-    }
+  const minute = 60000;
+  const limit = now + 48 * 60 * minute;
+  let next = Math.max(now, state.unlockedUntil, state.snoozeUntil);
+  if (!inLockWindow(new Date(next))) {
+    next = (Math.floor(next / minute) + 1) * minute;
+    while (next <= limit && !inLockWindow(new Date(next))) next += minute;
   }
-  return '設定なし';
+  if (next > limit) return '設定なし';
+
+  const date = new Date(next);
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  let day = '';
+  if (date.toDateString() === tomorrow.toDateString()) day = '明日 ';
+  else if (date.toDateString() !== today.toDateString()) day = `${date.getMonth() + 1}/${date.getDate()} `;
+  const pad = (n) => String(n).padStart(2, '0');
+  const when = `${day}${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const mins = Math.ceil((next - now) / minute);
+  return mins < 60 ? `${when}（あと${mins}分）` : when;
 }
 
 function openGate() {
   if (!els.gate.hidden) return;
-  els.gate.hidden = false;
   els.gateReq.textContent = requirementText();
+  els.gate.hidden = false;
+  els.gate.showModal();
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       new Notification('RepGate', { body: `${requirementText()}で解除できます`, tag: 'repgate-gate' });
@@ -239,18 +250,27 @@ function openGate() {
 }
 
 function closeGate() {
+  els.gate.close();
   els.gate.hidden = true;
 }
 
 function checkGate() {
+  clearTimeout(gateTimer);
   if (els.body.dataset.view === 'workout' || els.body.dataset.view === 'setup') return;
-  if (gateShouldBeClosed()) openGate();
+  const now = Date.now();
+  const state = store.loadState();
+  if (wouldGateClose(now, state)) openGate();
   else closeGate();
   if (els.body.dataset.view === 'home') {
     els.nextGate.textContent = describeNextGate();
   }
+  const nextMinute = (Math.floor(now / 60000) + 1) * 60000;
+  const releasedUntil = Math.max(state.unlockedUntil, state.snoozeUntil);
+  const nextCheck = releasedUntil > now ? Math.min(releasedUntil, nextMinute) : nextMinute;
+  gateTimer = setTimeout(checkGate, Math.max(0, nextCheck - Date.now()));
 }
 
+els.gate.addEventListener('cancel', (event) => event.preventDefault());
 $('gateStart').addEventListener('click', () => {
   closeGate();
   beginSetup();
@@ -272,13 +292,12 @@ document.addEventListener('visibilitychange', () => {
 /* ============================ カメラと計測ループ ============================ */
 
 $('startNow').addEventListener('click', beginSetup);
-$('abortWorkout').addEventListener('click', () => {
-  stopLoop();
-  stopCamera();
-  setView('home');
-});
+$('abortWorkout').addEventListener('click', () => setView('home'));
 
 async function beginSetup() {
+  stopCamera();
+  const request = Symbol();
+  cameraRequest = request;
   const def = EXERCISES[settings.exercise] ?? EXERCISES.situp;
   mode = 'setup';
   setupOkSince = 0;
@@ -292,8 +311,10 @@ async function beginSetup() {
   setView('setup');
 
   try {
-    await startCamera();
+    await startCamera(request);
   } catch (err) {
+    if (cameraRequest !== request) return;
+    stopCamera();
     els.guideTitle.textContent = 'カメラを使えませんでした';
     els.guideBody.textContent =
       err?.name === 'NotAllowedError'
@@ -301,37 +322,48 @@ async function beginSetup() {
         : `${err?.message ?? err}`;
     return;
   }
+  if (cameraRequest !== request) return;
 
   els.guideTitle.textContent = '判定の準備をしています…';
   els.guideBody.textContent = '初回はモデルの読み込みに少し時間がかかります。';
   try {
     await createLandmarker();
   } catch (err) {
+    if (cameraRequest !== request) return;
+    stopCamera();
     els.guideTitle.textContent = '判定エンジンを読み込めませんでした';
     els.guideBody.textContent = 'ネットワークにつながっているか確認してください。';
     return;
   }
+  if (cameraRequest !== request) return;
 
   els.guideTitle.textContent = def.guideTitle;
   els.guideBody.textContent = def.guideBody;
   startLoop();
 }
 
-async function startCamera() {
-  stopCamera();
-  stream = await navigator.mediaDevices.getUserMedia({
+async function startCamera(request) {
+  const nextStream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: settings.facing, width: { ideal: 960 }, height: { ideal: 720 } },
     audio: false,
   });
+  if (cameraRequest !== request) {
+    nextStream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  stream = nextStream;
   for (const v of [els.video, els.video2]) {
-    v.srcObject = stream;
+    if (cameraRequest !== request) return;
+    v.srcObject = nextStream;
     await v.play().catch(() => {});
   }
 }
 
 function stopCamera() {
+  cameraRequest = null;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
+  for (const v of [els.video, els.video2]) v.srcObject = null;
 }
 
 function startLoop() {
@@ -368,9 +400,10 @@ function tick() {
     try {
       lastResult = detect(video, performance.now());
     } catch (err) {
+      lastResult = null;
       console.warn('推論に失敗しました', err);
     }
-    if (lastResult) handleResult(lastResult);
+    handleResult(lastResult);
   }
 
   const ctx = canvas.getContext('2d');
@@ -383,8 +416,8 @@ function tick() {
 }
 
 function handleResult(result) {
-  const landmarks = result.landmarks?.[0];
-  const world = result.worldLandmarks?.[0];
+  const landmarks = result?.landmarks?.[0];
+  const world = result?.worldLandmarks?.[0];
   const def = EXERCISES[settings.exercise] ?? EXERCISES.situp;
 
   if (mode === 'setup') {
@@ -496,7 +529,7 @@ function finishWorkout() {
     seconds: Math.round(seconds),
     log: counter.log,
   };
-  store.addSession(lastSession);
+  $('recordWarning').hidden = store.addSession(lastSession);
 
   const state = store.loadState();
   state.unlockedUntil = Date.now() + settings.intervalMin * 60000;

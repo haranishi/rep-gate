@@ -71,27 +71,30 @@ export const EXERCISES = {
 
 export const EXERCISE_LIST = Object.values(EXERCISES);
 
+function requiredJoints(def, side) {
+  const joints = def.joints[side];
+  return def.form ? [...new Set([...joints, ...def.form.joints[side]])] : joints;
+}
+
 /**
  * そのフレームで使う角度と、判定に足る信頼度があるかを返す。
  * worldLandmarks があれば角度はそちらで計算する（画角の縦横比に左右されないため）。
  */
 function readAngle(def, landmarks, worldLandmarks) {
-  const chosen = pickSide(landmarks, def.joints.left, def.joints.right);
+  const chosen = pickSide(landmarks, requiredJoints(def, 'left'), requiredJoints(def, 'right'), MIN_VISIBILITY);
   const visible = chosen.indices.every((i) => visibilityOf(landmarks, i) >= MIN_VISIBILITY);
   const src = worldLandmarks?.length ? worldLandmarks : landmarks;
-  const [a, b, c] = chosen.indices.map((i) => src[i]);
-  return { angle: angleAt(a, b, c), visible, side: chosen.side, indices: chosen.indices };
+  const [a, b, c] = def.joints[chosen.side].map((i) => src[i]);
+  return { angle: angleAt(a, b, c), visible, side: chosen.side };
 }
 
 function readForm(def, landmarks, worldLandmarks, side) {
   if (!def.form) return { ok: true, angle: null };
   const idx = def.form.joints[side];
-  const visible = idx.every((i) => visibilityOf(landmarks, i) >= MIN_VISIBILITY);
-  if (!visible) return { ok: true, angle: null }; // 見えないときは形を理由に落とさない
   const src = worldLandmarks?.length ? worldLandmarks : landmarks;
   const [a, b, c] = idx.map((i) => src[i]);
   const angle = angleAt(a, b, c);
-  return { ok: angle == null || angle >= def.form.minAngle, angle };
+  return { ok: angle != null && angle >= def.form.minAngle, angle };
 }
 
 /**
@@ -166,8 +169,8 @@ export class RepCounter {
       this.formBroken = false;
       this.minAngleInRep = Infinity;
       this.maxAngleInRep = -Infinity;
-    } else {
-      if (this.phase === 'extended' || this.phase === 'init') {
+    } else if (this.phase !== 'init') {
+      if (this.phase === 'extended') {
         // 伸びきりから動き出した＝1レップの開始
         this.repStartedAt = now;
         this.reachedContracted = false;
@@ -197,19 +200,14 @@ export class RepCounter {
  * 開始前チェック。必要な関節がすべて規定の信頼度で見えているかを、部位名つきで返す。
  */
 export function checkSetup(def, landmarks) {
-  const need = new Set([...def.joints.left, ...def.joints.right]);
-  if (def.form) {
-    for (const i of [...def.form.joints.left, ...def.form.joints.right]) need.add(i);
-  }
-  const chosen = pickSide(landmarks, def.joints.left, def.joints.right);
-  const indices = def.form
-    ? [...chosen.indices, ...def.form.joints[chosen.side]]
-    : chosen.indices;
+  const left = requiredJoints(def, 'left');
+  const right = requiredJoints(def, 'right');
+  const chosen = pickSide(landmarks, left, right, SETUP_VISIBILITY);
 
-  const parts = [...new Set(indices)].map((i) => ({
+  const parts = chosen.indices.map((i) => ({
     index: i,
     visibility: visibilityOf(landmarks, i),
   }));
   const ok = parts.every((p) => p.visibility >= SETUP_VISIBILITY);
-  return { ok, parts, side: chosen.side, need: [...need] };
+  return { ok, parts, side: chosen.side, need: [...new Set([...left, ...right])] };
 }

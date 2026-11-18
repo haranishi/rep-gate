@@ -72,10 +72,14 @@ assets/icon.png
 
 ## テスト
 
-`tests/test-repgate.mjs` に26項目（判定ロジック・画面遷移・ゲート・リザルト画像・カメラ起動）。Playwright は kenkyuu-app の node_modules を借ります。
+`tests/test-repgate.mjs` で判定ロジック・画面遷移・ゲート・リザルト画像・カメラ起動を確認します。テスト用の Playwright は `tests/` にインストールします。
+
+Linux でブラウザ用のシステムライブラリが入っていない場合は、`playwright install chromium` に `--with-deps` を加えてください。
 
 ```bash
-python3 -m http.server 8777 --bind 127.0.0.1   # サーバーを立ててから
+npm --prefix tests ci
+npm --prefix tests exec -- playwright install chromium
+python3 -m http.server 8777 --bind 127.0.0.1   # サーバーを立ててから別の端末で次を実行
 node tests/test-repgate.mjs                     # スクショは tests/output/ に出る
 ```
 

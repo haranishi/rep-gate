@@ -193,6 +193,7 @@
     <button class="btn btn--primary" id="shareBtn">画像を共有する</button>
     <button class="btn btn--ghost" id="downloadBtn">画像を保存する</button>
 
+    <p id="recordWarning" role="alert" hidden>この運動を端末に保存できませんでした。記録一覧や計測ログには追加されません。</p>
     <div class="card" id="sessionStats"></div>
   </div>
 </section>
@@ -215,16 +216,16 @@
 </section>
 
 <!-- ============ ゲート（全画面オーバーレイ） ============ -->
-<div class="gate" id="gate" hidden>
+<dialog class="gate" id="gate" aria-labelledby="gateTitle" aria-describedby="gateReqText" hidden>
   <div class="gate__inner">
     <p class="gate__eyebrow">GATE CLOSED</p>
-    <h2 class="gate__title">時間になりました</h2>
-    <p class="gate__req"><span id="gateReq">—</span>で解除できます</p>
-    <button class="btn btn--primary btn--lg" id="gateStart">カメラを開く</button>
+    <h2 class="gate__title" id="gateTitle">時間になりました</h2>
+    <p class="gate__req" id="gateReqText"><span id="gateReq">—</span>で解除できます</p>
+    <button class="btn btn--primary btn--lg" id="gateStart" autofocus>カメラを開く</button>
     <button class="btn btn--ghost btn--sm" id="gateSnooze">あとで（5分）</button>
     <p class="gate__note">閉じているのはこの画面だけです。ほかのアプリは止まりません。</p>
   </div>
-</div>
+</dialog>
 
 <script type="module" src="js/main.js"></script>
 </body>
