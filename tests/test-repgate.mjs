@@ -1,7 +1,6 @@
-const pw = await import('/Users/hara/Projects/kenkyuu-app/node_modules/playwright/index.js');
-const chromium = pw.chromium ?? pw.default?.chromium;
+import { chromium } from 'playwright';
 
-const BASE = 'http://127.0.0.1:8777';
+const BASE = process.env.REPGATE_BASE_URL ?? 'http://127.0.0.1:8777';
 const results = [];
 const ok = (name, pass, detail = '') => {
   results.push({ name, pass, detail });
@@ -19,8 +18,10 @@ const context = await browser.newContext({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
   permissions: ['camera'],
+  timezoneId: 'UTC',
 });
 const page = await context.newPage();
+await page.clock.setFixedTime(new Date('2026-08-11T12:00:00Z'));
 
 const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -246,8 +247,9 @@ await page.waitForFunction(
     const t = document.getElementById('guideTitle').textContent ?? '';
     return !t.includes('準備をしています') && !t.includes('カメラを準備');
   },
+  undefined,
   { timeout: 60000 },
-).catch(() => {});
+);
 const guideTitle = await page.textContent('#guideTitle');
 ok('姿勢推定エンジンが読み込める', !/読み込めません|使えませんでした/.test(guideTitle ?? ''), guideTitle ?? '');
 
@@ -259,7 +261,8 @@ ok('人がいないフレームでは開始させない', beginDisabled === true
 // 推論ループが実際に回っているか（合成映像なので検出はされない前提）
 const looping = await page.evaluate(() => {
   const c = document.getElementById('overlay');
-  return c.width > 0 && c.height > 0;
+  const v = document.getElementById('video');
+  return v.videoWidth > 0 && c.width === v.videoWidth && c.height === v.videoHeight;
 });
 ok('オーバーレイが映像サイズに同期する', looping);
 
