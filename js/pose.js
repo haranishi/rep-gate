@@ -1,11 +1,7 @@
 // MediaPipe Pose Landmarker のラッパーと角度計算。
 // 推論はすべてブラウザ内（WASM）で動く。映像は端末外に出さない。
 
-import {
-  FilesetResolver,
-  PoseLandmarker,
-} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs';
-
+const VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs';
 const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -32,6 +28,7 @@ export const LM_NAME = {
 };
 
 let landmarker = null;
+let PoseLandmarker;
 
 /**
  * Landmarker を用意する。GPU が使えない端末では CPU に落とす。
@@ -39,6 +36,9 @@ let landmarker = null;
  */
 export async function createLandmarker() {
   if (landmarker) return landmarker;
+  const vision = await import(VISION_URL);
+  const { FilesetResolver } = vision;
+  PoseLandmarker = vision.PoseLandmarker;
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
   const base = {
     runningMode: 'VIDEO',
@@ -103,7 +103,7 @@ export function pickSide(landmarks, leftIdx, rightIdx) {
 
 /** 骨格を canvas に描く。ライブラリの描画ユーティリティは使わず自前で引く。 */
 export function drawSkeleton(ctx, landmarks, w, h, color) {
-  if (!landmarks) return;
+  if (!landmarks || !PoseLandmarker) return;
   ctx.lineWidth = Math.max(2, w / 220);
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
