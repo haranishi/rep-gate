@@ -27,6 +27,7 @@ const els = {
 
 let settings = store.loadSettings();
 let stream = null;
+let cameraRequest = null;
 let rafId = null;
 let mode = null;             // 'setup' | 'workout'
 let counter = null;
@@ -42,7 +43,10 @@ let messageTimer = 0;
 
 function setView(name) {
   els.body.dataset.view = name;
-  if (name !== 'setup' && name !== 'workout') stopLoop();
+  if (name !== 'setup' && name !== 'workout') {
+    stopLoop();
+    stopCamera();
+  }
   if (name === 'home') renderHome();
   if (name === 'history') renderHistory();
   window.scrollTo(0, 0);
@@ -272,13 +276,12 @@ document.addEventListener('visibilitychange', () => {
 /* ============================ カメラと計測ループ ============================ */
 
 $('startNow').addEventListener('click', beginSetup);
-$('abortWorkout').addEventListener('click', () => {
-  stopLoop();
-  stopCamera();
-  setView('home');
-});
+$('abortWorkout').addEventListener('click', () => setView('home'));
 
 async function beginSetup() {
+  stopCamera();
+  const request = Symbol();
+  cameraRequest = request;
   const def = EXERCISES[settings.exercise] ?? EXERCISES.situp;
   mode = 'setup';
   setupOkSince = 0;
@@ -292,8 +295,10 @@ async function beginSetup() {
   setView('setup');
 
   try {
-    await startCamera();
+    await startCamera(request);
   } catch (err) {
+    if (cameraRequest !== request) return;
+    stopCamera();
     els.guideTitle.textContent = 'カメラを使えませんでした';
     els.guideBody.textContent =
       err?.name === 'NotAllowedError'
@@ -301,37 +306,48 @@ async function beginSetup() {
         : `${err?.message ?? err}`;
     return;
   }
+  if (cameraRequest !== request) return;
 
   els.guideTitle.textContent = '判定の準備をしています…';
   els.guideBody.textContent = '初回はモデルの読み込みに少し時間がかかります。';
   try {
     await createLandmarker();
   } catch (err) {
+    if (cameraRequest !== request) return;
+    stopCamera();
     els.guideTitle.textContent = '判定エンジンを読み込めませんでした';
     els.guideBody.textContent = 'ネットワークにつながっているか確認してください。';
     return;
   }
+  if (cameraRequest !== request) return;
 
   els.guideTitle.textContent = def.guideTitle;
   els.guideBody.textContent = def.guideBody;
   startLoop();
 }
 
-async function startCamera() {
-  stopCamera();
-  stream = await navigator.mediaDevices.getUserMedia({
+async function startCamera(request) {
+  const nextStream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: settings.facing, width: { ideal: 960 }, height: { ideal: 720 } },
     audio: false,
   });
+  if (cameraRequest !== request) {
+    nextStream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  stream = nextStream;
   for (const v of [els.video, els.video2]) {
-    v.srcObject = stream;
+    if (cameraRequest !== request) return;
+    v.srcObject = nextStream;
     await v.play().catch(() => {});
   }
 }
 
 function stopCamera() {
+  cameraRequest = null;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
+  for (const v of [els.video, els.video2]) v.srcObject = null;
 }
 
 function startLoop() {
