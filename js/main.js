@@ -212,24 +212,32 @@ function gateShouldBeClosed(now = Date.now()) {
   return wouldGateClose(now, store.loadState());
 }
 
-/** 次にゲートが閉じる時刻。1分刻みで48時間先まで探す。 */
+/** 解除・猶予の満了時刻と、それ以降の分の境界を48時間先まで調べる。 */
 function describeNextGate() {
   const state = store.loadState();
   const now = Date.now();
   if (wouldGateClose(now, state)) return 'いま（ゲート中）';
 
-  for (let i = 1; i <= 60 * 48; i += 1) {
-    const t = now + i * 60000;
-    if (wouldGateClose(t, state)) {
-      const d = new Date(t);
-      const p = (n) => String(n).padStart(2, '0');
-      const sameDay = d.toDateString() === new Date(now).toDateString();
-      const mins = Math.round((t - now) / 60000);
-      const when = `${sameDay ? '' : '明日 '}${p(d.getHours())}:${p(d.getMinutes())}`;
-      return mins < 60 ? `${when}（あと${mins}分）` : when;
-    }
+  const minute = 60000;
+  const limit = now + 48 * 60 * minute;
+  let next = Math.max(now, state.unlockedUntil, state.snoozeUntil);
+  if (!inLockWindow(new Date(next))) {
+    next = (Math.floor(next / minute) + 1) * minute;
+    while (next <= limit && !inLockWindow(new Date(next))) next += minute;
   }
-  return '設定なし';
+  if (next > limit) return '設定なし';
+
+  const date = new Date(next);
+  const today = new Date(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  let day = '';
+  if (date.toDateString() === tomorrow.toDateString()) day = '明日 ';
+  else if (date.toDateString() !== today.toDateString()) day = `${date.getMonth() + 1}/${date.getDate()} `;
+  const pad = (n) => String(n).padStart(2, '0');
+  const when = `${day}${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const mins = Math.ceil((next - now) / minute);
+  return mins < 60 ? `${when}（あと${mins}分）` : when;
 }
 
 function openGate() {
